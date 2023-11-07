@@ -186,11 +186,11 @@ jobs:
           git commit -m "Added model files"
           git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
   
-#   build:
-#     needs: [create_new_branch, push-model]
-#     runs-on: ubuntu-latest
+  build:
+    needs: [create_new_branch, push-model]
+    runs-on: ubuntu-latest
 
-#     steps:
+    steps:
 #     # Checkout the repository to the GitHub Actions runner 🟢
 #     - uses: actions/checkout@v4
 #       if: needs.create_new_branch.outputs.BRANCHNAME == ''
@@ -198,52 +198,52 @@ jobs:
 #         ref: issue-${{ github.event.issue.number }}
 #         fetch-depth: 0
 
-#     # If branchName is empty use issue number, else, use the branchName 🟢
-#     - uses: actions/checkout@v4
-#       if: needs.create_new_branch.outputs.BRANCHNAME != ''
-#       with:
-#           ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-#           fetch-depth: 0
+    # If branchName is empty use issue number, else, use the branchName 🟢
+    - uses: actions/checkout@v4
+      # if: needs.create_new_branch.outputs.BRANCHNAME != ''
+      with:
+          ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          fetch-depth: 0
 
-#     # Set up Python
-#     - name: Set up Python
-#       uses: actions/setup-python@v4
-#       with:
-#         python-version: 3.11
+    # Set up Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
 
-#     # Install yaml
-#     - name: Install yaml and oyaml
-#       run: |
-#           pip install pyyaml
-#           pip install oyaml
+    # Install yaml
+    - name: Install yaml and oyaml
+      run: |
+          pip install pyyaml
+          pip install oyaml
 
-#     # Install linkml
-#     - name: Install LinkML
-#       run: pip install linkml
+    # Install linkml
+    - name: Install LinkML
+      run: pip install linkml
         
-#     # Create model card and spec.yaml file
-#     - name: Validate model card and spec files
-#       run: |
-#           echo "## Model Card and Spec Validation :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-#           echo "Model Card and spec yaml files are being validated here with LinkML Schema" >> $GITHUB_STEP_SUMMARY
-#           python ./.github/workflows/create_model_card_and_spec.py
-#       env:
-#           model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
+    # Create model card and spec.yaml file
+    - name: Validate model card and spec files
+      run: |
+          echo "## Model Card and Spec Validation :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "Model Card and spec yaml files are being validated here with LinkML Schema" >> $GITHUB_STEP_SUMMARY
+          python ./.github/workflows/create_model_card_and_spec.py
+      env:
+          model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
       
-#     # Update the model's spec.yaml file
-#     - name: Update yaml file
-#       run: |
-#         model_name=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF-1)}')
-#         python ./.github/workflows/update_yaml_info.py ${{ needs.create_new_branch.outputs.MODELPATH }}/docker $model_name
+    # Update the model's spec.yaml file
+    - name: Update yaml file
+      run: |
+        model_name=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF-1)}')
+        python ./.github/workflows/update_yaml_info.py ${{ needs.create_new_branch.outputs.MODELPATH }}/docker $model_name
     
-#     # Commit the changes (spec.yaml file and model card) 🟢
-#     - name: Commit changes
-#       run: |
-#         git config --global user.name "trained_models"
-#         git config --global user.email "trained_models"
-#         git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
-#         git commit -m "Updated spec.yaml"
-#         git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+    # Commit the changes (spec.yaml file and model card) 🟢
+    - name: Commit changes
+      run: |
+        git config --global user.name "trained_models"
+        git config --global user.email "trained_models"
+        git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
+        git commit -m "Updated spec.yaml"
+        git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
 #   build-docker:
 #     needs: [create_new_branch, push-model, build]
