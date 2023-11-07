@@ -102,7 +102,7 @@ jobs:
 
     steps:
       - name: hello
-        run: echo {{ needs.create_new_branch.outputs.BRANCHNAME }}
+        run: echo ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
 #       # Checkout the repository to the GitHub Actions runner to the new branch created for the issue 🟢
 #       - uses: actions/checkout@v4
