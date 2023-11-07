@@ -279,7 +279,7 @@ jobs:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
         run: |
           datalad siblings && datalad siblings
-          mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+          mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
           cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
           datalad download-url --overwrite -m "Added model weights" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
           datalad push --to osf-annex1106-storage
@@ -289,7 +289,7 @@ jobs:
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
         run: |
-          mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+          mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
           cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
           datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
           datalad push --to osf-annex1106-storage
