@@ -245,16 +245,16 @@ jobs:
         git commit -m "Updated spec.yaml"
         git push -f origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
-#   build-docker:
-#     needs: [create_new_branch, push-model, build]
+  build-docker:
+    needs: [create_new_branch, push-model, build]
 
-#     runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-#     outputs:
-#       IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
-#       MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
+    outputs:
+      IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
+      MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
 
-#     steps:
+    steps:
 #       # Checkout the repository to the GitHub Actions runner 🟢
 #       - uses: actions/checkout@v4
 #         if: needs.create_new_branch.outputs.BRANCHNAME == ''
@@ -262,21 +262,21 @@ jobs:
 #           ref: issue-${{ github.event.issue.number }}
 #           fetch-depth: 0
 
-#       # If branchName is empty use issue number, else, use the branchName 🟢
-#       - uses: actions/checkout@v4
-#         if: needs.create_new_branch.outputs.BRANCHNAME != ''
-#         with:
-#             ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-#             fetch-depth: 0
+      # If branchName is empty use issue number, else, use the branchName 🟢
+      - uses: actions/checkout@v4
+        # if: needs.create_new_branch.outputs.BRANCHNAME != ''
+        with:
+            ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+            fetch-depth: 0
 
-#       # Get image name 🟢
-#       - name: Set docker image name
-#         id: set_image_name
-#         run: |
-#           full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
-#           model_name=$(echo "$full_path" | awk -F '/' '{print $(NF-1)}')
-#           echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
-#           echo "model_name=$model_name" >> $GITHUB_OUTPUT
+      # Get image name 🟢
+      - name: Set docker image name
+        id: set_image_name
+        run: |
+          full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
+          model_name=$(echo "$full_path" | awk -F '/' '{print $(NF-1)}')
+          echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
+          echo "model_name=$model_name" >> $GITHUB_OUTPUT
 
 #   push-weights:
 #     needs: [create_new_branch, push-model, build, build-docker]
