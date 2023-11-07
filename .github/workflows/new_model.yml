@@ -292,7 +292,7 @@ jobs:
           mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
           cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
           datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
-          datalad push --to osf-storage
+          datalad push --to osf-annex1106-storage
           datalad push --to origin
 
 
