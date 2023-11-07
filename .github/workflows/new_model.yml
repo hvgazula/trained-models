@@ -183,8 +183,8 @@ jobs:
           git config --global user.name "trained_models"
           git config --global user.email "trained_models"
           git add ${{ needs.create_new_branch.outputs.MODELPATH }}
-          git commit -m "Added model files"
-          git push -f origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          git diff-index --quiet HEAD || git commit -m "Added model files"
+          git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
   
   build:
     needs: [create_new_branch, push-model]
