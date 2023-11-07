@@ -243,7 +243,7 @@ jobs:
         git config --global user.email "trained_models"
         git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
         git commit -m "Updated spec.yaml"
-        git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+        git push -f origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
 #   build-docker:
 #     needs: [create_new_branch, push-model, build]
