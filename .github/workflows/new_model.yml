@@ -365,61 +365,61 @@ jobs:
           datalad push --to origin
 
 
-#   start-runner:
-#     needs: [create_new_branch, push-model, build, build-docker, push-weights]
+  start-runner:
+    needs: [create_new_branch, push-model, build, build-docker, push-weights]
 
-#     runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-#     outputs:
-#       label: ${{ steps.start-ec2-runner.outputs.label }}
-#       ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
-#     steps:
-#       - name: Configure AWS credentials
-#         uses: aws-actions/configure-aws-credentials@v1
-#         with:
-#           aws-access-key-id: ${{ secrets.AWS_KEY_ID }}
-#           aws-secret-access-key: ${{ secrets.AWS_KEY_SECRET }}
-#           aws-region: ${{ vars.AWS_REGION }}
-#       - name: Start EC2 runner
-#         id: start-ec2-runner
-#         uses: machulav/ec2-github-runner@v2
-#         with:
-#           mode: start
-#           github-token: ${{ secrets.GH_TOKEN }}
-#           ec2-image-id: ${{ vars.AWS_IMAGE_ID }}
-#           ec2-instance-type: ${{ vars.AWS_INSTANCE_TYPE }}
-#           subnet-id: ${{ vars.AWS_SUBNET }}
-#           security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_KEY_SECRET }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Start EC2 runner
+        id: start-ec2-runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: start
+          github-token: ${{ secrets.GH_TOKEN }}
+          ec2-image-id: ${{ vars.AWS_IMAGE_ID }}
+          ec2-instance-type: ${{ vars.AWS_INSTANCE_TYPE }}
+          subnet-id: ${{ vars.AWS_SUBNET }}
+          security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
 
-#   test-model:
-#     name: Do the job on the runner
-#     needs: [create_new_branch, push-model, build, build-docker, push-weights, start-runner] # required to start the main job when the runner is ready
-#     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
-#     steps:
-#         # Setups singularity to the job to make it accessible to other steps
-#         # Cleanup steps to free up disk space
-#       - name: Cleanup disk space for large docker images
-#         run: |
-#               sudo rm -rf /usr/share/dotnet
-#               sudo rm -rf /opt/ghc
-#               sudo rm -rf "/usr/local/share/boost"
-#               sudo rm -rf /opt/hostedtoolcache
-#               sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+  test-model:
+    name: Do the job on the runner
+    needs: [create_new_branch, push-model, build, build-docker, push-weights, start-runner] # required to start the main job when the runner is ready
+    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    steps:
+        # Setups singularity to the job to make it accessible to other steps
+        # Cleanup steps to free up disk space
+      - name: Cleanup disk space for large docker images
+        run: |
+              sudo rm -rf /usr/share/dotnet
+              sudo rm -rf /opt/ghc
+              sudo rm -rf "/usr/local/share/boost"
+              sudo rm -rf /opt/hostedtoolcache
+              sudo rm -rf "$AGENT_TOOLSDIRECTORY"
             
-#       - name: Free Disk Space (Ubuntu)
-#         uses: jlumbroso/free-disk-space@main
-#         with:
-#           # this might remove tools that are actually needed,
-#           # if set to "true" but frees about 6 GB
-#           tool-cache: false
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
           
-#           # all of these default to true, but feel free to set to
-#           # "false" if necessary for your workflow
-#           android: true
-#           dotnet: true
-#           haskell: true
-#           large-packages: true
-#           docker-images: false
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
         
 #       - uses: actions/checkout@v4
 #         if: needs.create_new_branch.outputs.BRANCHNAME == ''
@@ -427,12 +427,12 @@ jobs:
 #           ref: issue-${{ github.event.issue.number }}
 #           fetch-depth: 0
 
-#       # If branchName is empty use issue number, else, use the branchName 🟢
-#       - uses: actions/checkout@v4
-#         if: needs.create_new_branch.outputs.BRANCHNAME != ''
-#         with:
-#             ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-#             fetch-depth: 0
+      # If branchName is empty use issue number, else, use the branchName 🟢
+      - uses: actions/checkout@v4
+        # if: needs.create_new_branch.outputs.BRANCHNAME != ''
+        with:
+            ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+            fetch-depth: 0
 
 #       - name: Install singularity
 #         run: |
