@@ -184,7 +184,7 @@ jobs:
           git config --global user.email "trained_models"
           git add ${{ needs.create_new_branch.outputs.MODELPATH }}
           git commit -m "Added model files"
-          git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          git push -f origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
   
   build:
     needs: [create_new_branch, push-model]
@@ -243,7 +243,7 @@ jobs:
         git config --global user.email "trained_models"
         git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
         git commit -m "Updated spec.yaml"
-        git push -f origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+        git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
   build-docker:
     needs: [create_new_branch, push-model, build]
@@ -278,30 +278,30 @@ jobs:
           echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
           echo "model_name=$model_name" >> $GITHUB_OUTPUT
 
-#   push-weights:
-#     needs: [create_new_branch, push-model, build, build-docker]
-#     runs-on: ubuntu-latest
+  push-weights:
+    needs: [create_new_branch, push-model, build, build-docker]
+    runs-on: ubuntu-latest
 
-#     steps:
-#       # Checkout the repository to the GitHub Actions runner to the new branch created for the issue 🟢
-#       - uses: actions/checkout@v4
-#         if: needs.create_new_branch.outputs.BRANCHNAME == ''
-#         with:
-#           ref: issue-${{ github.event.issue.number }}
-#           fetch-depth: 0
+    steps:
+      # # Checkout the repository to the GitHub Actions runner to the new branch created for the issue 🟢
+      # - uses: actions/checkout@v4
+      #   if: needs.create_new_branch.outputs.BRANCHNAME == ''
+      #   with:
+      #     ref: issue-${{ github.event.issue.number }}
+      #     fetch-depth: 0
       
-#           # If branchName is empty use issue number, else, use the branchName 🟢
-#       - uses: actions/checkout@v4
-#         if: needs.create_new_branch.outputs.BRANCHNAME != ''
-#         with:
-#             ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-#             fetch-depth: 0
+          # If branchName is empty use issue number, else, use the branchName 🟢
+      - uses: actions/checkout@v4
+        # if: needs.create_new_branch.outputs.BRANCHNAME != ''
+        with:
+            ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+            fetch-depth: 0
 
-#       # Set up Python
-#       - name: Set up Python
-#         uses: actions/setup-python@v4
-#         with:
-#           python-version: 3.11
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
 
 #       # Install datalad 🟢
 #       - name: Install Datalad
