@@ -98,8 +98,8 @@ jobs:
       # If branchName is empty use issue number, else, use the branchName 🟢
       - uses: actions/checkout@v4
         with:
-            ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-            fetch-depth: 0
+          ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          fetch-depth: 0
 
       # Install svn to clone subdir of github repos 🟢
       - name: Install svn
@@ -120,7 +120,7 @@ jobs:
           python ./.github/workflows/getPythonScripts.py >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
         env:
-            pythons: ${{ needs.create_new_branch.outputs.PYTHONS }}
+          pythons: ${{ needs.create_new_branch.outputs.PYTHONS }}
       
       # Export the urls/clone the scripts 🟢
       - name: Clone python scripts
@@ -139,7 +139,7 @@ jobs:
           python ./.github/workflows/getModelInfo.py >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
         env:
-            model_info: ${{ needs.create_new_branch.outputs.MODELINFO }}
+          model_info: ${{ needs.create_new_branch.outputs.MODELINFO }}
 
       # Export the urls/clone the model info 🟢
       - name: Clone model info
@@ -178,8 +178,8 @@ jobs:
     # If branchName is empty use issue number, else, use the branchName 🟢
     - uses: actions/checkout@v4
       with:
-          ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-          fetch-depth: 0
+        ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+        fetch-depth: 0
 
     # Set up Python
     - name: Set up Python
@@ -190,8 +190,8 @@ jobs:
     # Install yaml
     - name: Install yaml and oyaml
       run: |
-          pip install pyyaml
-          pip install oyaml
+        pip install pyyaml
+        pip install oyaml
 
     # Install linkml
     - name: Install LinkML
@@ -200,11 +200,11 @@ jobs:
     # Create model card and spec.yaml file
     - name: Validate model card and spec files
       run: |
-          echo "## Model Card and Spec Validation :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-          echo "Model Card and spec yaml files are being validated here with LinkML Schema" >> $GITHUB_STEP_SUMMARY
-          python ./.github/workflows/create_model_card_and_spec.py
+        echo "## Model Card and Spec Validation :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+        echo "Model Card and spec yaml files are being validated here with LinkML Schema" >> $GITHUB_STEP_SUMMARY
+        python ./.github/workflows/create_model_card_and_spec.py
       env:
-          model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
+        model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
       
     # Update the model's spec.yaml file
     - name: Update yaml file
@@ -233,8 +233,8 @@ jobs:
       # If branchName is empty use issue number, else, use the branchName 🟢
       - uses: actions/checkout@v4
         with:
-            ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-            fetch-depth: 0
+          ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          fetch-depth: 0
 
       # Get image name 🟢
       - name: Set docker image name
@@ -254,8 +254,8 @@ jobs:
       # If branchName is empty use issue number, else, use the branchName 🟢
       - uses: actions/checkout@v4
         with:
-            ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-            fetch-depth: 0
+          ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          fetch-depth: 0
 
       # Set up Python
       - name: Set up Python
@@ -278,30 +278,22 @@ jobs:
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
         run: |
-              datalad siblings
-              datalad siblings
-              # mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-              # cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-              # datalad download-url --overwrite -m "Added model weights" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
-              # datalad push --to osf-storage
-              # datalad push --to origin
+          datalad siblings && datalad siblings
+          mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+          cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+          datalad download-url --overwrite -m "Added model weights" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
+          datalad push --to osf-annex1106-storage
+          datalad push --to origin
 
-      # - name: Git-annex/Datalad add the sample datasets
-      #   env:
-      #     OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
-      #   run: |
-      #     mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-
-      #     cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-
-      #     # datalad download-url --overwrite -m "Added Sample Dataset" -O ./${{needs.create_new_branch.outputs.MODELPATH}}/example-data/sample.${{ steps.get_extensions_sample_data.outputs.sample_ext }} "${{needs.create_new_branch.outputs.SAMPLEDATA}}"
-
-      #     datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
-
-      #     datalad save . -m "Added sample data"
-
-      #     datalad push --to osf-storage
-      #     datalad push --to origin
+      - name: Git-annex/Datalad add the sample datasets
+        env:
+          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+        run: |
+          mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+          cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+          datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
+          datalad push --to osf-storage
+          datalad push --to origin
 
 
 #   start-runner:
