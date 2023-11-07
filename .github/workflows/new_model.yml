@@ -166,7 +166,7 @@ jobs:
           git config --global user.name "trained_models"
           git config --global user.email "trained_models"
           git add ${{ needs.create_new_branch.outputs.MODELPATH }}
-          git commit -m "Added model files"
+          git diff-index --quiet HEAD || git commit -m "Added model files"
           git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
   
   build:
@@ -218,7 +218,7 @@ jobs:
         git config --global user.name "trained_models"
         git config --global user.email "trained_models"
         git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
-        git commit -m "Updated spec.yaml"
+        git diff-index --quiet HEAD || git commit -m "Updated spec.yaml"
         git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
   build-docker:
@@ -273,24 +273,18 @@ jobs:
           git config --global user.name "trained_models"
           git config --global user.email "trained_models"
 
-      # #Git annex addurl the weights
-      # - name: Git-annex/Datalad add the weights
-      #   env:
-      #     OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
-      #   run: |
-      #         # datalad siblings
-      #         mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-
-      #         cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-
-      #         # datalad download-url --overwrite -m "Added Weights" -O ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights/best_model.${{ steps.get_extensions_weights.outputs.weights_ext }} "${{ needs.create_new_branch.outputs.WEIGHTS }}"
-
-      #         datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
-
-      #         datalad save . -m "Added model weights"
-              
-      #         datalad push --to osf-storage
-      #         datalad push --to origin
+      #Git annex addurl the weights
+      - name: Git-annex/Datalad add the weights
+        env:
+          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+        run: |
+              datalad siblings
+              datalad siblings
+              # mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+              # cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+              # datalad download-url --overwrite -m "Added model weights" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
+              # datalad push --to osf-storage
+              # datalad push --to origin
 
       # - name: Git-annex/Datalad add the sample datasets
       #   env:
