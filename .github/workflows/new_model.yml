@@ -355,7 +355,9 @@ jobs:
           fetch-depth: 0
 
       - name: printing branches
-        run: git branch -a
+        run: |
+          git branch -a
+          echo ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
 #       # If branchName is empty use issue number, else, use the branchName 🟢
 #       - uses: actions/checkout@v4
