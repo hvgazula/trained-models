@@ -349,18 +349,18 @@ jobs:
           large-packages: true
           docker-images: false
 
-      - name: Install singularity
-        run: |
-          wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
-          sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
-          singularity version
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
           fetch-depth: 0
       - run: git branch
       - run: pwd
+
+      - name: Install singularity
+        run: |
+          wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
+          sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
+          singularity version
 
 #       # Build the Docker image 🟢
 #       - name: Build Docker image
