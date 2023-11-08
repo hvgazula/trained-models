@@ -76,6 +76,8 @@ jobs:
       TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
 
     steps:
+    - run: export HOME=/home/ubuntu
+    - run: echo $USER
     # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
     - name: Create Issue Branch
       id: branch
@@ -102,46 +104,46 @@ jobs:
       with:
         template-path: .github/ISSUE_TEMPLATE/addModel.yml # optional but recommended
     
-    # # Scrape info from the form 🟢
-    # - name: Get the Path
-    #   id: get_path
-    #   run: echo "path=${{ steps.issue-parser.outputs.issueparser_path }}" >> $GITHUB_OUTPUT
+    # Scrape info from the form 🟢
+    - name: Get the Path
+      id: get_path
+      run: echo "path=${{ steps.issue-parser.outputs.issueparser_path }}" >> $GITHUB_OUTPUT
     
-    # - name: Get the Weights
-    #   id: get_weights
-    #   run: echo "weights=${{ steps.issue-parser.outputs.issueparser_weights }}" >> $GITHUB_OUTPUT
+    - name: Get the Weights
+      id: get_weights
+      run: echo "weights=${{ steps.issue-parser.outputs.issueparser_weights }}" >> $GITHUB_OUTPUT
     
-    # - name: Get docker folder
-    #   id: get_docker
-    #   run: echo "docker=${{ steps.issue-parser.outputs.issueparser_docker }}" >> $GITHUB_OUTPUT
+    - name: Get docker folder
+      id: get_docker
+      run: echo "docker=${{ steps.issue-parser.outputs.issueparser_docker }}" >> $GITHUB_OUTPUT
 
-    # - name: Get Python Scripts
-    #   id: python_scripts
-    #   run: |
-    #     echo "pythons<<EOF" >> $GITHUB_ENV
-    #     echo "${{ steps.issue-parser.outputs.issueparser_python-scripts }}" >> $GITHUB_ENV
-    #     echo "EOF" >> $GITHUB_ENV
+    - name: Get Python Scripts
+      id: python_scripts
+      run: |
+        echo "pythons<<EOF" >> $GITHUB_ENV
+        echo "${{ steps.issue-parser.outputs.issueparser_python-scripts }}" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
 
-    # - name: Get Model Info
-    #   id: get_model_info
-    #   run: |
-    #     echo "model_info<<EOF" >> $GITHUB_ENV
-    #     echo "${{ steps.issue-parser.outputs.issueparser_model_info }}" >> $GITHUB_ENV
-    #     echo "EOF" >> $GITHUB_ENV
+    - name: Get Model Info
+      id: get_model_info
+      run: |
+        echo "model_info<<EOF" >> $GITHUB_ENV
+        echo "${{ steps.issue-parser.outputs.issueparser_model_info }}" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
 
-    # - name: Get Test Command
-    #   id: get_test_command
-    #   run: |
-    #     echo "test_command=${{ steps.issue-parser.outputs.issueparser_testCommand }}" >> $GITHUB_OUTPUT
+    - name: Get Test Command
+      id: get_test_command
+      run: |
+        echo "test_command=${{ steps.issue-parser.outputs.issueparser_testCommand }}" >> $GITHUB_OUTPUT
 
-    # - name: Get Sample Data
-    #   id: get_data
-    #   run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
+    - name: Get Sample Data
+      id: get_data
+      run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
     
-    # - name: Get Config
-    #   id: get_model_config
-    #   run: |
-    #     echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
+    - name: Get Config
+      id: get_model_config
+      run: |
+        echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
   
   stop-runner:
     name: Stop self-hosted EC2 runner
