@@ -28,36 +28,6 @@ jobs:
           subnet-id: ${{ vars.AWS_SUBNET }}
           security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
 
-  # free-space:
-  #   name: Do the job on the runner
-  #   needs: [start-runner] # push-model, build, build-docker, push-weights, start-runner] # required to start the main job when the runner is ready
-  #   runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
-  #   steps:
-  #       # Setups singularity to the job to make it accessible to other steps
-  #       # Cleanup steps to free up disk space
-  #     - name: Cleanup disk space for large docker images
-  #       run: |
-  #         sudo rm -rf /usr/share/dotnet
-  #         sudo rm -rf /opt/ghc
-  #         sudo rm -rf "/usr/local/share/boost"
-  #         sudo rm -rf /opt/hostedtoolcache
-  #         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-            
-  #     - name: Free Disk Space (Ubuntu)
-  #       uses: jlumbroso/free-disk-space@main
-  #       with:
-  #         # this might remove tools that are actually needed,
-  #         # if set to "true" but frees about 6 GB
-  #         tool-cache: false
-          
-  #         # all of these default to true, but feel free to set to
-  #         # "false" if necessary for your workflow
-  #         android: true
-  #         dotnet: true
-  #         haskell: true
-  #         large-packages: true
-  #         docker-images: false
-      
   create_new_branch:
     needs: [start-runner]
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
@@ -76,67 +46,104 @@ jobs:
       TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
 
     steps:
-    # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
-    - name: Create Issue Branch
-      id: branch
-      uses: robvanderleek/create-issue-branch@main
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        
-    # Checkout the repository to the GitHub Actions runner 🟢
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ steps.branch.outputs.branchName }}
-        fetch-depth: 0
-        
-    # Scrape the info from the issue 🟢
-    - uses: stefanbuck/github-issue-parser@v3
-      id: issue-parser
-      with:
-        template-path: .github/ISSUE_TEMPLATE/addModel.yml # optional but recommended
-      env:
-        HOME: "/home/ubuntu"
+      # - name: Cleanup disk space for large docker images
+      #   run: |
+      #     sudo rm -rf /usr/share/dotnet
+      #     sudo rm -rf /opt/ghc
+      #     sudo rm -rf "/usr/local/share/boost"
+      #     sudo rm -rf /opt/hostedtoolcache
+      #     sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+            
+      # - name: Free Disk Space (Ubuntu)
+      #   uses: jlumbroso/free-disk-space@main
+      #   with:
+      #     # this might remove tools that are actually needed,
+      #     # if set to "true" but frees about 6 GB
+      #     tool-cache: false
+          
+      #     # all of these default to true, but feel free to set to
+      #     # "false" if necessary for your workflow
+      #     android: true
+      #     dotnet: true
+      #     haskell: true
+      #     large-packages: true
+      #     docker-images: false
 
-    # Scrape info from the form 🟢
-    - name: Get the Path
-      id: get_path
-      run: echo "path=${{ steps.issue-parser.outputs.issueparser_path }}" >> $GITHUB_OUTPUT
-    
-    - name: Get the Weights
-      id: get_weights
-      run: echo "weights=${{ steps.issue-parser.outputs.issueparser_weights }}" >> $GITHUB_OUTPUT
-    
-    - name: Get docker folder
-      id: get_docker
-      run: echo "docker=${{ steps.issue-parser.outputs.issueparser_docker }}" >> $GITHUB_OUTPUT
+            # Install datalad 🟢
+      - name: Install Datalad
+        id: datalad-testing
+        run: |
+          apt install unzip datalad python3-pip subversion -y
+          python3 -m pip install datalad-installer datalad-osf
+          python3 -m pip install pyyaml oyaml linkml
+          
+          datalad-installer --sudo ok git-annex -m datalad/git-annex:release
+          sudo git config --global filter.annex.process "git-annex filter-process"
+          
+          git config --system user.name "test_aws"
+          git config --system user.email "test_aws"
 
-    - name: Get Python Scripts
-      id: python_scripts
-      run: |
-        echo "pythons<<EOF" >> $GITHUB_ENV
-        echo "${{ steps.issue-parser.outputs.issueparser_python-scripts }}" >> $GITHUB_ENV
-        echo "EOF" >> $GITHUB_ENV
+      # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
+      - name: Create Issue Branch
+        id: branch
+        uses: robvanderleek/create-issue-branch@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          
+      # Checkout the repository to the GitHub Actions runner 🟢
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.branchName }}
+          fetch-depth: 0
+          
+      # Scrape the info from the issue 🟢
+      - uses: stefanbuck/github-issue-parser@v3
+        id: issue-parser
+        with:
+          template-path: .github/ISSUE_TEMPLATE/addModel.yml # optional but recommended
+        env:
+          HOME: "/home/ubuntu"
 
-    - name: Get Model Info
-      id: get_model_info
-      run: |
-        echo "model_info<<EOF" >> $GITHUB_ENV
-        echo "${{ steps.issue-parser.outputs.issueparser_model_info }}" >> $GITHUB_ENV
-        echo "EOF" >> $GITHUB_ENV
+      # Scrape info from the form 🟢
+      - name: Get the Path
+        id: get_path
+        run: echo "path=${{ steps.issue-parser.outputs.issueparser_path }}" >> $GITHUB_OUTPUT
+      
+      - name: Get the Weights
+        id: get_weights
+        run: echo "weights=${{ steps.issue-parser.outputs.issueparser_weights }}" >> $GITHUB_OUTPUT
+      
+      - name: Get docker folder
+        id: get_docker
+        run: echo "docker=${{ steps.issue-parser.outputs.issueparser_docker }}" >> $GITHUB_OUTPUT
 
-    - name: Get Test Command
-      id: get_test_command
-      run: |
-        echo "test_command=${{ steps.issue-parser.outputs.issueparser_testCommand }}" >> $GITHUB_OUTPUT
+      - name: Get Python Scripts
+        id: python_scripts
+        run: |
+          echo "pythons<<EOF" >> $GITHUB_ENV
+          echo "${{ steps.issue-parser.outputs.issueparser_python-scripts }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
-    - name: Get Sample Data
-      id: get_data
-      run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
-    
-    - name: Get Config
-      id: get_model_config
-      run: |
-        echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
+      - name: Get Model Info
+        id: get_model_info
+        run: |
+          echo "model_info<<EOF" >> $GITHUB_ENV
+          echo "${{ steps.issue-parser.outputs.issueparser_model_info }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Get Test Command
+        id: get_test_command
+        run: |
+          echo "test_command=${{ steps.issue-parser.outputs.issueparser_testCommand }}" >> $GITHUB_OUTPUT
+
+      - name: Get Sample Data
+        id: get_data
+        run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
+      
+      - name: Get Config
+        id: get_model_config
+        run: |
+          echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
   
   push-model:
     needs: [start-runner, create_new_branch]
@@ -145,9 +152,9 @@ jobs:
       IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
       MODELNAME: ${{ steps.set_image_name.outputs.model_name }} 
     steps:
-      # Install svn to clone subdir of github repos 🟢
-      - name: Install svn
-        run: sudo apt-get -y install subversion
+      # # Install svn to clone subdir of github repos 🟢
+      # - name: Install svn
+      #   run: sudo apt-get -y install subversion
       
       # Get svn url for exporting docker 🟢
       - name: Clone docker folder
@@ -216,11 +223,6 @@ jobs:
           # git commit -m "Added model files"
           # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
 
-      # Install yaml
-      - name: Install yaml and oyaml
-        run: |
-            python3 -m pip install pyyaml oyaml linkml
-
       # Create model card and spec.yaml file
       - name: Validate model card and spec files
         run: |
@@ -241,6 +243,7 @@ jobs:
         run: |
           git config --system user.name "trained_models"
           git config --system user.email "trained_models"
+
           # git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
           # git commit -m "Updated spec.yaml"
           # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
@@ -254,20 +257,6 @@ jobs:
           echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
           echo "model_name=$model_name" >> $GITHUB_OUTPUT
 
-      # Install datalad 🟢
-      - name: Install Datalad
-        id: testing
-        run: |
-          apt install unzip datalad python3-pip -y
-          python3 -m pip install datalad-installer datalad-osf
-          datalad-installer --sudo ok git-annex -m datalad/git-annex:release
-          sudo git config --global filter.annex.process "git-annex filter-process"
-          git config --system user.name "test_aws"
-          git config --system user.email "test_aws"
-
-          datalad siblings
-          datalad siblings
-
       # #Git annex addurl the weights
       # - name: Git-annex/Datalad add the weights
       #   env:
@@ -277,13 +266,12 @@ jobs:
       #       cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
       #       datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
       #       datalad save . -m "Added model weights"
-      #       datalad push -f --to osf-storage
-      #       datalad push --to origin
 
       #       mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
       #       cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
       #       datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
       #       datalad save . -m "Added sample data"
+
       #       datalad push -f --to osf-storage
       #       datalad push --to origin
 
