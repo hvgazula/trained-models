@@ -5,6 +5,7 @@ on:
 
 jobs:
   start-runner:
+    if: ${{ startsWith(github.event.issue.title, 'New Model:') && github.event.label.name != 'failed' }}
     runs-on: ubuntu-latest
     outputs:
       label: ${{ steps.start-ec2-runner.outputs.label }}
@@ -27,39 +28,39 @@ jobs:
           subnet-id: ${{ vars.AWS_SUBNET }}
           security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
 
-  test-model:
-    name: Do the job on the runner
-    needs: [start-runner] # push-model, build, build-docker, push-weights, start-runner] # required to start the main job when the runner is ready
-    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
-    steps:
-        # Setups singularity to the job to make it accessible to other steps
-        # Cleanup steps to free up disk space
-      - name: Cleanup disk space for large docker images
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf /opt/hostedtoolcache
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+  # free-space:
+  #   name: Do the job on the runner
+  #   needs: [start-runner] # push-model, build, build-docker, push-weights, start-runner] # required to start the main job when the runner is ready
+  #   runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+  #   steps:
+  #       # Setups singularity to the job to make it accessible to other steps
+  #       # Cleanup steps to free up disk space
+  #     - name: Cleanup disk space for large docker images
+  #       run: |
+  #         sudo rm -rf /usr/share/dotnet
+  #         sudo rm -rf /opt/ghc
+  #         sudo rm -rf "/usr/local/share/boost"
+  #         sudo rm -rf /opt/hostedtoolcache
+  #         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
             
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
+  #     - name: Free Disk Space (Ubuntu)
+  #       uses: jlumbroso/free-disk-space@main
+  #       with:
+  #         # this might remove tools that are actually needed,
+  #         # if set to "true" but frees about 6 GB
+  #         tool-cache: false
           
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: false
+  #         # all of these default to true, but feel free to set to
+  #         # "false" if necessary for your workflow
+  #         android: true
+  #         dotnet: true
+  #         haskell: true
+  #         large-packages: true
+  #         docker-images: false
       
   create_new_branch:
-    if: ${{ startsWith(github.event.issue.title, 'New Model:') && github.event.label.name != 'failed' }}
-    runs-on: ubuntu-latest
+    needs: [start-runner]
+    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
     outputs:
       BRANCHNAME: ${{ steps.branch.outputs.branchName }}
 
@@ -143,7 +144,7 @@ jobs:
   
   stop-runner:
     name: Stop self-hosted EC2 runner
-    needs: [start-runner, test-model] # required to wait when the main job is done
+    needs: [start-runner, create_new_branch] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -161,3 +162,52 @@ jobs:
           github-token: ${{ secrets.GH_TOKEN }}
           label: ${{ needs.start-runner.outputs.label }}
           ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
+
+  failed:
+    runs-on: ubuntu-latest
+    needs: [start-runner, create_new_branch]
+    if: ${{ failure() }}
+    steps:
+      - name: Set labels
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'set-labels'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          labels: 'failed'
+
+      - name: Create comment
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'create-comment'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+              [This is an automated message] Hello @${{ github.event.issue.user.login }},
+              🔴 The folders/scripts you provided did not pass our tests. Please review the Action, and modify this issue's urls accordingly. 
+              When ready, simply append "Ready XX" in the issue title (where XX is a number incrementing with 01 each time a fix has been applied).
+          emoji: '+1,eyes'
+        
+  success:
+      needs: [start-runner, create_new_branch, stop-runner]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Set labels
+          uses: actions-cool/issues-helper@v3
+          with:
+            actions: 'set-labels'
+            token: ${{ secrets.GITHUB_TOKEN }}
+            issue-number: ${{ github.event.issue.number }}
+            labels: 'success'
+        
+        - name: Create comment
+          uses: actions-cool/issues-helper@v3
+          with:
+            actions: 'create-comment'
+            token: ${{ secrets.GITHUB_TOKEN }}
+            issue-number: ${{ github.event.issue.number }}
+            body: |
+                [This is an automated message] Hello @${{ github.event.issue.user.login }}. The workflow linked to adding your model finished successfully! Please double check that this issue's tag is "success."  
+                🟢 A Draft PR should be linked to this issue. Now that your model passed the checks, feel free to change the status of the PR to "ready for review."
+                ⭐ Thank you for adding a model to Nobrainer-Zoo!
+            emoji: '+1,hooray,rocket'
