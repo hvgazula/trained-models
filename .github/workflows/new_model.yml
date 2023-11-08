@@ -349,29 +349,18 @@ jobs:
           large-packages: true
           docker-images: false
 
+      - name: Install singularity
+        run: |
+          wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
+          sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
+          singularity version
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
           fetch-depth: 0
-
-      - name: printing branches
-        run: |
-          git branch -a
-          echo ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-
-#       # If branchName is empty use issue number, else, use the branchName 🟢
-#       - uses: actions/checkout@v4
-#         if: needs.create_new_branch.outputs.BRANCHNAME != ''
-#         with:
-#             ref: ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-#             fetch-depth: 0
-
-#       - name: Install singularity
-#         run: |
-#           wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
-
-#           sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
-#           singularity version
+      - run: git branch
+      - run: pwd
 
 #       # Build the Docker image 🟢
 #       - name: Build Docker image
@@ -384,18 +373,22 @@ jobs:
 #         run: |
 #           singularity build ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.sif docker-archive://./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar
 
-#       # Datalad get the sample dataset
-#       - name: Get sample dataset
-#         run: |
-#           sudo apt install python3-pip -y
-#           sudo apt-get install datalad -y
-#           python3 -m pip install datalad-osf
-#           sudo python3 -m pip install datalad-installer
-#           datalad-installer --sudo ok git-annex -m datalad/git-annex:release
-#           sudo git config --global filter.annex.process "git-annex filter-process"
+      # Datalad get the sample dataset
+      - name: Get sample dataset
+        run: |
+          pwd
+          sudo apt -y install python3-pip
+          sudo apt -y install datalad
+          python3 -m pip install datalad-osf
+          sudo python3 -m pip install datalad-installer
+          datalad-installer --sudo ok git-annex -m datalad/git-annex:release
+          sudo git config --global filter.annex.process "git-annex filter-process"
 
-#           git config --system user.name "trained_models"
-#           git config --system user.email "trained_models"
+          git config --system user.name "trained_models"
+          git config --system user.email "trained_models"
+
+          git branch
+          pwd
 
 #           datalad get ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights/
 
