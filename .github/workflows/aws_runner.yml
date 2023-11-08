@@ -76,8 +76,6 @@ jobs:
       TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
 
     steps:
-    - run: export HOME=/home/ubuntu
-    - run: echo $USER
     # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
     - name: Create Issue Branch
       id: branch
@@ -96,7 +94,7 @@ jobs:
       with:
         ref: ${{ steps.branch.outputs.branchName }}
         fetch-depth: 0
-    - run: pwd
+    - run: git branch -a
         
     # Scrape the info from the issue 🟢
     - uses: stefanbuck/github-issue-parser@v3
@@ -147,9 +145,92 @@ jobs:
       run: |
         echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
   
+  push-model:
+    needs: [start-runner, create_new_branch]
+    runs-on: ${{ needs.start-runner.outputs.label }} 
+    steps:
+      # Checkout the repository to the GitHub Actions runner to the new branch created for the issue 🟢
+      - uses: actions/checkout@v4
+        if: needs.create_new_branch.outputs.BRANCHNAME == ''
+        with:
+          ref: issue-${{ github.event.issue.number }}
+          fetch-depth: 0
+                  
+      # Install svn to clone subdir of github repos 🟢
+      - name: Install svn
+        run: sudo apt-get -y install subversion
+      
+      # Get svn url for exporting docker 🟢
+      - name: Clone docker folder
+        run: |
+          url="${{ needs.create_new_branch.outputs.DOCKER }}"
+          
+          svn_url=$(echo "$url" | sed -E 's|/tree/[^/]+|/trunk|; s|/blob/[^/]+|/trunk|')
+
+          svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+      
+      # Get svn url for exporting 🟢
+      - name: Generate Python SVN URLs
+        id: generate_urls
+        run: |
+          echo "pythons2<<EOF" >> $GITHUB_ENV
+          python3 ./.github/workflows/getPythonScripts.py >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        env:
+            pythons: ${{ needs.create_new_branch.outputs.PYTHONS }}
+      
+      # Export the urls/clone the scripts 🟢
+      - name: Clone python scripts
+        run: |
+          cd ./${{ needs.create_new_branch.outputs.MODELPATH }}
+          svn_urls="${{ env.pythons2 }}"
+          for svn_url in $svn_urls; do
+            svn export --force $svn_url
+          done
+      
+      # Get svn urls for exporting card and spec urls 🟢
+      - name: Generate Model Info SVN URLs
+        id: generate_model_info_urls
+        run: |
+          echo "model_info2<<EOF" >> $GITHUB_ENV
+          python3 ./.github/workflows/getModelInfo.py >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        env:
+            model_info: ${{ needs.create_new_branch.outputs.MODELINFO }}
+
+      # Export the urls/clone the model info 🟢
+      - name: Clone model info
+        run: |
+          model_info="${{ env.model_info2 }}"
+          for svn_url in $model_info; do
+            svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}
+          done
+
+      # Clone config files
+      - name: Config file clone
+        # Only run if needs.create_new_branch.outputs.CONFIG is not empty
+        if: ${{ needs.create_new_branch.outputs.CONFIG != '' }}
+        run: |
+          mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/config/
+          url="${{ needs.create_new_branch.outputs.CONFIG }}"
+              
+          svn_url=$(echo "$url" | sed -E 's|/tree/[^/]+|/trunk|; s|/blob/[^/]+|/trunk|')
+    
+          svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}/config
+    
+      # Commit the new created files and folders to the branch needs.create_new_branch.outputs.BRANCHNAME 🟢
+      - name: Commit and Push the new files
+        run: |
+          git branch -a
+          git config --system user.name "trained_models"
+          git config --system user.email "trained_models"
+          # git add ${{ needs.create_new_branch.outputs.MODELPATH }}
+          # git commit -m "Added model files"
+          # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+
   stop-runner:
     name: Stop self-hosted EC2 runner
-    needs: [start-runner, create_new_branch] # required to wait when the main job is done
+    needs: [start-runner, create_new_branch, push-model] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -170,7 +251,7 @@ jobs:
 
   failed:
     runs-on: ubuntu-latest
-    needs: [start-runner, create_new_branch]
+    needs: [start-runner, create_new_branch, push-model]
     if: ${{ failure() }}
     steps:
       - name: Set labels
@@ -194,7 +275,7 @@ jobs:
           emoji: '+1,eyes'
         
   success:
-      needs: [start-runner, create_new_branch, stop-runner]
+      needs: [start-runner, create_new_branch, push-model, stop-runner]
       runs-on: ubuntu-latest
       steps:
         - name: Set labels
