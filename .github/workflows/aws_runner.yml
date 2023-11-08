@@ -83,18 +83,11 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         
-    # Set up Python 🟢
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: 3.11
-
     # Checkout the repository to the GitHub Actions runner 🟢
     - uses: actions/checkout@v4
       with:
         ref: ${{ steps.branch.outputs.branchName }}
         fetch-depth: 0
-    - run: git branch -a
         
     # Scrape the info from the issue 🟢
     - uses: stefanbuck/github-issue-parser@v3
@@ -147,15 +140,11 @@ jobs:
   
   push-model:
     needs: [start-runner, create_new_branch]
-    runs-on: ${{ needs.start-runner.outputs.label }} 
+    runs-on: ${{ needs.start-runner.outputs.label }}
+    outputs:
+      IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
+      MODELNAME: ${{ steps.set_image_name.outputs.model_name }} 
     steps:
-      # Checkout the repository to the GitHub Actions runner to the new branch created for the issue 🟢
-      - uses: actions/checkout@v4
-        if: needs.create_new_branch.outputs.BRANCHNAME == ''
-        with:
-          ref: issue-${{ github.event.issue.number }}
-          fetch-depth: 0
-                  
       # Install svn to clone subdir of github repos 🟢
       - name: Install svn
         run: sudo apt-get -y install subversion
@@ -166,7 +155,6 @@ jobs:
           url="${{ needs.create_new_branch.outputs.DOCKER }}"
           
           svn_url=$(echo "$url" | sed -E 's|/tree/[^/]+|/trunk|; s|/blob/[^/]+|/trunk|')
-
           svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
       
       # Get svn url for exporting 🟢
@@ -227,6 +215,77 @@ jobs:
           # git add ${{ needs.create_new_branch.outputs.MODELPATH }}
           # git commit -m "Added model files"
           # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+
+      # Install yaml
+      - name: Install yaml and oyaml
+        run: |
+            python3 -m pip install pyyaml oyaml linkml
+
+      # Create model card and spec.yaml file
+      - name: Validate model card and spec files
+        run: |
+            echo "## Model Card and Spec Validation :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+            echo "Model Card and spec yaml files are being validated here with LinkML Schema" >> $GITHUB_STEP_SUMMARY
+            python3 ./.github/workflows/create_model_card_and_spec.py
+        env:
+            model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
+        
+      # Update the model's spec.yaml file
+      - name: Update yaml file
+        run: |
+          model_name=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF-1)}')
+          python3 ./.github/workflows/update_yaml_info.py ${{ needs.create_new_branch.outputs.MODELPATH }}/docker $model_name
+      
+      # Commit the changes (spec.yaml file and model card) 🟢
+      - name: Commit changes
+        run: |
+          git config --system user.name "trained_models"
+          git config --system user.email "trained_models"
+          # git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
+          # git commit -m "Updated spec.yaml"
+          # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          
+      # Get image name 🟢
+      - name: Set docker image name
+        id: set_image_name
+        run: |
+          full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
+          model_name=$(echo "$full_path" | awk -F '/' '{print $(NF-1)}')
+          echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
+          echo "model_name=$model_name" >> $GITHUB_OUTPUT
+
+      # Install datalad 🟢
+      - name: Install Datalad
+        id: testing
+        run: |
+          apt install unzip datalad python3-pip -y
+          python3 -m pip install datalad-installer datalad-osf
+          datalad-installer --sudo ok git-annex -m datalad/git-annex:release
+          sudo git config --global filter.annex.process "git-annex filter-process"
+          git config --system user.name "test_aws"
+          git config --system user.email "test_aws"
+
+          datalad siblings
+          datalad siblings
+
+      # #Git annex addurl the weights
+      # - name: Git-annex/Datalad add the weights
+      #   env:
+      #     OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+      #   run: |
+      #       mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+      #       cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+      #       datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
+      #       datalad save . -m "Added model weights"
+      #       datalad push -f --to osf-storage
+      #       datalad push --to origin
+
+      #       mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+      #       cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+      #       datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
+      #       datalad save . -m "Added sample data"
+      #       datalad push -f --to osf-storage
+      #       datalad push --to origin
 
   stop-runner:
     name: Stop self-hosted EC2 runner
