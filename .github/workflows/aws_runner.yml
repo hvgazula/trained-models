@@ -1,0 +1,163 @@
+name: aws_runner
+on:
+  issues:
+    types: [ assigned, labeled ] 
+
+jobs:
+  start-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_KEY_SECRET }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Start EC2 runner
+        id: start-ec2-runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: start
+          github-token: ${{ secrets.GH_TOKEN }}
+          ec2-image-id: ${{ vars.AWS_IMAGE_ID }}
+          ec2-instance-type: ${{ vars.AWS_INSTANCE_TYPE }}
+          subnet-id: ${{ vars.AWS_SUBNET }}
+          security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
+
+  test-model:
+    name: Do the job on the runner
+    needs: [start-runner] # push-model, build, build-docker, push-weights, start-runner] # required to start the main job when the runner is ready
+    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    steps:
+        # Setups singularity to the job to make it accessible to other steps
+        # Cleanup steps to free up disk space
+      - name: Cleanup disk space for large docker images
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /opt/hostedtoolcache
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+            
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+          
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
+      
+  create_new_branch:
+    if: ${{ startsWith(github.event.issue.title, 'New Model:') && github.event.label.name != 'failed' }}
+    runs-on: ubuntu-latest
+    outputs:
+      BRANCHNAME: ${{ steps.branch.outputs.branchName }}
+
+      # All the issue form data
+      MODELPATH: ${{ steps.get_path.outputs.path }}
+      WEIGHTS: ${{ steps.get_weights.outputs.weights }}
+      DOCKER: ${{ steps.get_docker.outputs.docker }}
+      PYTHON: ${{ steps.python_scripts.outputs.pythons }}
+      MODELINFO: ${{ env.model_info }}
+      SAMPLEDATA: ${{ steps.get_data.outputs.sample_data }}
+      PYTHONS: ${{ env.pythons }}
+      CONFIG: ${{ steps.get_model_config.outputs.model_config }}
+      TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
+
+    steps:
+    # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
+    - name: Create Issue Branch
+      id: branch
+      uses: robvanderleek/create-issue-branch@main
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        
+    # Set up Python 🟢
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    # Checkout the repository to the GitHub Actions runner 🟢
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ steps.branch.outputs.branchName }}
+        fetch-depth: 0
+        
+    # Scrape the info from the issue 🟢
+    - uses: stefanbuck/github-issue-parser@v3
+      id: issue-parser
+      with:
+        template-path: .github/ISSUE_TEMPLATE/addModel.yml # optional but recommended
+    
+    # Scrape info from the form 🟢
+    - name: Get the Path
+      id: get_path
+      run: echo "path=${{ steps.issue-parser.outputs.issueparser_path }}" >> $GITHUB_OUTPUT
+    
+    - name: Get the Weights
+      id: get_weights
+      run: echo "weights=${{ steps.issue-parser.outputs.issueparser_weights }}" >> $GITHUB_OUTPUT
+    
+    - name: Get docker folder
+      id: get_docker
+      run: echo "docker=${{ steps.issue-parser.outputs.issueparser_docker }}" >> $GITHUB_OUTPUT
+
+    - name: Get Python Scripts
+      id: python_scripts
+      run: |
+        echo "pythons<<EOF" >> $GITHUB_ENV
+        echo "${{ steps.issue-parser.outputs.issueparser_python-scripts }}" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+    - name: Get Model Info
+      id: get_model_info
+      run: |
+        echo "model_info<<EOF" >> $GITHUB_ENV
+        echo "${{ steps.issue-parser.outputs.issueparser_model_info }}" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+    - name: Get Test Command
+      id: get_test_command
+      run: |
+        echo "test_command=${{ steps.issue-parser.outputs.issueparser_testCommand }}" >> $GITHUB_OUTPUT
+
+    - name: Get Sample Data
+      id: get_data
+      run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
+    
+    - name: Get Config
+      id: get_model_config
+      run: |
+        echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
+  
+  stop-runner:
+    name: Stop self-hosted EC2 runner
+    needs: [start-runner, test-model] # required to wait when the main job is done
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    # required to stop the runner even if the error happened in the previous jobs
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+            aws-access-key-id: ${{ secrets.AWS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_KEY_SECRET }}
+            aws-region: ${{ vars.AWS_REGION }}
+      - name: Stop EC2 runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: stop
+          github-token: ${{ secrets.GH_TOKEN }}
+          label: ${{ needs.start-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
