@@ -103,7 +103,9 @@ jobs:
       id: issue-parser
       with:
         template-path: .github/ISSUE_TEMPLATE/addModel.yml # optional but recommended
-    
+      env:
+        HOME: "/home/ubuntu"
+
     # Scrape info from the form 🟢
     - name: Get the Path
       id: get_path
