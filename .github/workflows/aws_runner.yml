@@ -91,14 +91,9 @@ jobs:
           sudo git config --global filter.annex.process "git-annex filter-process"
       
       - name: Configure git credentials
-        run:
+        run: |
           git config --system user.name "trained_models"
           git config --system user.email "trained_models"
-
-      - name: Print Datalad Siblings
-        run: |
-          datalad siblings
-          datalad siblings
 
       # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
       - name: Create Issue Branch
@@ -112,6 +107,11 @@ jobs:
         with:
           ref: ${{ steps.branch.outputs.branchName }}
           fetch-depth: 0
+    
+      - name: Print Datalad Siblings
+        run: |
+          datalad siblings
+          datalad siblings
           
       - name: Scrape info from the issue 🟢
         uses: stefanbuck/github-issue-parser@v3
