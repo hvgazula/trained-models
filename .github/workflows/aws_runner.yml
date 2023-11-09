@@ -29,7 +29,7 @@ jobs:
           subnet-id: ${{ vars.AWS_SUBNET }}
           security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
 
-  init-setup:
+  create_new_branch:
     name: Initial setup on EC2
     needs: [start-runner]
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
@@ -161,14 +161,13 @@ jobs:
         id: get_data
         run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
 
-  # add-files-to-branch:
-  #   needs: [start-runner, init-setup]
-  #   runs-on: ${{ needs.start-runner.outputs.label }}
-  #   outputs:
-  #     IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
-  #     MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
-
-  #   steps: 
+  add-files-to-branch:
+    needs: [start-runner, create_new_branch]
+    runs-on: ${{ needs.start-runner.outputs.label }}
+    outputs:
+      IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
+      MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
+    steps: 
       # Get svn url for exporting docker 🟢
       - name: Clone docker folder
         run: |
@@ -317,7 +316,7 @@ jobs:
 
   end-setup:
     name: Closing setup on EC2
-    needs: [start-runner, init-setup]
+    needs: [start-runner, create_new_branch]
     runs-on: ${{ needs.start-runner.outputs.label }}
     steps: 
       - name: Commit changes
@@ -328,7 +327,7 @@ jobs:
 
   stop-runner:
     name: Stop self-hosted EC2 runner
-    needs: [start-runner, init-setup, end-setup] # required to wait when the main job is done
+    needs: [start-runner, create_new_branch, end-setup] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -350,7 +349,7 @@ jobs:
   failed:
     name: Failed
     runs-on: ubuntu-latest
-    needs: [start-runner, init-setup, end-setup]
+    needs: [start-runner, create_new_branch, end-setup]
     if: ${{ failure() }}
     steps:
       - name: Set labels
@@ -375,7 +374,7 @@ jobs:
         
   success:
     name: Success
-    needs: [start-runner, init-setup, end-setup, stop-runner]
+    needs: [start-runner, create_new_branch, end-setup, stop-runner]
     runs-on: ubuntu-latest
     steps:
       - name: Set labels
