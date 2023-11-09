@@ -240,6 +240,69 @@ jobs:
           model_name=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF-1)}')
           python3 ./.github/workflows/update_yaml_info.py ${{ needs.create_new_branch.outputs.MODELPATH }}/docker $model_name
       
+      # Get image name 🟢
+      - name: Set docker image name
+        id: set_image_name
+        run: |
+          full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
+          model_name=$(echo "$full_path" | awk -F '/' '{print $(NF-1)}')
+          org_name=$(echo "$full_path" | awk -F '/' '{print $(NF-2)}')
+          model_version=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF)}')
+              
+          echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
+          echo "model_name=$model_name" >> $GITHUB_OUTPUT
+          echo "org_name=$org_name" >> $GITHUB_OUTPUT
+          echo "model_version=$model_version" >> $GITHUB_OUTPUT
+
+      # Git annex addurl the weights
+      - name: Add weights
+        env:
+          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+        run: |
+            datalad download-url -o --nosave "${{ needs.create_new_branch.outputs.WEIGHTS }}" -O ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights/
+            datalad download-url -o --nosave "${{ needs.create_new_branch.outputs.SAMPLEDATA }}" -O ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data/
+
+            # unzip files in place and delete after
+            find . -name '*.zip' -not -path "./.git/*" -execdir unzip '{}' ';' -delete
+      
+      - name: print directory structure
+        run: tree ${{ steps.set_image_name.outputs.org_name }}
+
+      # Build the Docker image 🟢
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+
+      # Convert the docker image to a singularity image
+      - name: Convert docker image to singularity image
+        run: |
+          singularity build ../${{ steps.set_image_name.outputs.model_name }}.sif docker-daemon://${{ steps.set_image_name.outputs.model_name }}:latest
+
+      - name: Collect Workflow Telemetry
+        uses: runforesight/workflow-telemetry-action@v1
+        with:
+          job_summary: true
+          proc_trace_sys_enable: true
+          proc_trace_table_show: true
+  
+      # # Run in singularity the test command
+      # - name: Run test command in Singularity
+      #   run: |
+      #     # Parent directory as a bind path in a env variable
+      #     singularity exec --nv ../${{ needs.push_files.outputs.MODELNAME }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
+
+      # # Test model with docker image as well
+      # - name: Run test command in Docker
+      #   run: |
+      #     docker run --gpus all -v /actions-runner/_work/${{ github.event.repository.name }}/${{ github.event.repository.name }}:/output ${{ needs.build-docker.outputs.MODELNAME }} "cd /output; ${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
+          
+      # # Push the Docker image to Docker Hub (only if the PR is merged) 🟢
+      # - name: Push Docker image
+      #   run: |
+      #     docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+      #     docker tag ${{ needs.push_files.outputs.MODELNAME }} ${{ needs.push_files.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
+      #     docker push ${{ needs.push_files.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
+
       # Commit the changes (spec.yaml file and model card) 🟢
       - name: Commit changes
         run: |
@@ -249,91 +312,6 @@ jobs:
           # git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
           # git commit -m "Updated spec.yaml"
           # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-          
-      # Get image name 🟢
-      - name: Set docker image name
-        id: set_image_name
-        run: |
-          full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
-          model_name=$(echo "$full_path" | awk -F '/' '{print $(NF-1)}')
-          echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
-          echo "model_name=$model_name" >> $GITHUB_OUTPUT
-
-      # Git annex addurl the weights
-      - name: Add weights
-        env:
-          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
-        run: |
-            mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-            cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-
-            find . -name "*.zip" -exec unzip {} \;
-            datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
-            datalad save . -m "Added model weights"
-
-      - name: Add weights
-        env:
-          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
-        run: |
-            mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-            cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-            pwd
-            find . -name "*.zip" -exec unzip {} \;
-            ll
-            datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
-            datalad save . -m "Added sample data"
-
-      # # Build the Docker image 🟢
-      # - name: Build Docker image
-      #   run: |
-      #     docker build -t ${{ needs.build-docker.outputs.MODELNAME }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
-      #     docker save --output ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar ${{ needs.build-docker.outputs.MODELNAME }}
-
-      # # Convert the docker image to a singularity image
-      # - name: Convert docker image to singularity image
-      #   run: |
-      #     singularity build ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.sif docker-archive://./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar
-
-      # - name: Collect Workflow Telemetry
-      #   uses: runforesight/workflow-telemetry-action@v1
-      #   with:
-      #     job_summary: true
-      #     proc_trace_sys_enable: true
-      #     proc_trace_table_show: true
-  
-      # # Run in singularity the test command saved under needs.create_new_branch.outputs.DEEPCSR
-      # - name: Run test command in Singularity
-      #   run: |
-      #     # Parent directory as a bind path in a env variable
-
-      #     singularity exec --nv ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
-
-      # # Load the Docker image 🟢
-      # - name: Load Docker image
-      #   run: |
-      #     docker load --input "./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar"
-
-      # # Test model with docker image as well
-      # - name: Run test command in Docker
-      #   run: |
-      #     docker run --gpus all -v /actions-runner/_work/${{ github.event.repository.name }}/${{ github.event.repository.name }}:/output ${{ needs.build-docker.outputs.MODELNAME }} "cd /output; ${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
-          
-      # Get model's version from model's path
-      - name: Get model's version
-        id: modelVersion
-        run: |
-          # Get the version
-          model_version=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF)}')
-          
-          # Set the version as an output
-          echo "model_version=$model_version" >> $GITHUB_OUTPUT
-      
-      # # Push the Docker image to Docker Hub (only if the PR is merged) 🟢
-      # - name: Push Docker image
-      #   run: |
-      #     docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-      #     docker tag ${{ needs.build-docker.outputs.MODELNAME }} ${{ needs.build-docker.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
-      #     docker push ${{ needs.build-docker.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
 
   stop-runner:
     name: Stop self-hosted EC2 runner
