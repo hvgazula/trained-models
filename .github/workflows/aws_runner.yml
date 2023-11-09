@@ -277,14 +277,11 @@ jobs:
         run: |
             mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
             cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-
+            pwd
             find . -name "*.zip" -exec unzip {} \;
+            ll
             datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
             datalad save . -m "Added sample data"
-
-      - run: |
-          pwd
-          tree
 
       # # Build the Docker image 🟢
       # - name: Build Docker image
