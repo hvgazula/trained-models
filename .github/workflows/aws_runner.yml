@@ -46,42 +46,49 @@ jobs:
       TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
 
     steps:
-      # - name: Cleanup disk space for large docker images
-      #   run: |
-      #     sudo rm -rf /usr/share/dotnet
-      #     sudo rm -rf /opt/ghc
-      #     sudo rm -rf "/usr/local/share/boost"
-      #     sudo rm -rf /opt/hostedtoolcache
-      #     sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      - name: Cleanup disk space for large docker images
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /opt/hostedtoolcache
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
             
-      # - name: Free Disk Space (Ubuntu)
-      #   uses: jlumbroso/free-disk-space@main
-      #   with:
-      #     # this might remove tools that are actually needed,
-      #     # if set to "true" but frees about 6 GB
-      #     tool-cache: false
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
           
-      #     # all of these default to true, but feel free to set to
-      #     # "false" if necessary for your workflow
-      #     android: true
-      #     dotnet: true
-      #     haskell: true
-      #     large-packages: true
-      #     docker-images: false
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
 
-            # Install datalad 🟢
+      - name: Install singularity
+        run: |
+          wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
+
+          sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
+          singularity version
+
+      # Install datalad 🟢
       - name: Install Datalad
         id: datalad-testing
         run: |
-          apt install unzip datalad python3-pip subversion -y
+          apt install unzip datalad python3-pip subversion tree -y
           python3 -m pip install datalad-installer datalad-osf
           python3 -m pip install pyyaml oyaml linkml
           
           datalad-installer --sudo ok git-annex -m datalad/git-annex:release
           sudo git config --global filter.annex.process "git-annex filter-process"
           
-          git config --system user.name "test_aws"
-          git config --system user.email "test_aws"
+          git config --system user.name "trained_models"
+          git config --system user.email "trained_models"
 
       # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
       - name: Create Issue Branch
@@ -144,18 +151,14 @@ jobs:
         id: get_model_config
         run: |
           echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
-  
-  push-model:
+
+  push_files:
     needs: [start-runner, create_new_branch]
     runs-on: ${{ needs.start-runner.outputs.label }}
     outputs:
       IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
-      MODELNAME: ${{ steps.set_image_name.outputs.model_name }} 
-    steps:
-      # # Install svn to clone subdir of github repos 🟢
-      # - name: Install svn
-      #   run: sudo apt-get -y install subversion
-      
+      MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
+    steps: 
       # Get svn url for exporting docker 🟢
       - name: Clone docker folder
         run: |
@@ -216,7 +219,6 @@ jobs:
       # Commit the new created files and folders to the branch needs.create_new_branch.outputs.BRANCHNAME 🟢
       - name: Commit and Push the new files
         run: |
-          git branch -a
           git config --system user.name "trained_models"
           git config --system user.email "trained_models"
           # git add ${{ needs.create_new_branch.outputs.MODELPATH }}
@@ -257,27 +259,88 @@ jobs:
           echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
           echo "model_name=$model_name" >> $GITHUB_OUTPUT
 
-      # #Git annex addurl the weights
-      # - name: Git-annex/Datalad add the weights
-      #   env:
-      #     OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+      # Git annex addurl the weights
+      - name: Add weights
+        env:
+          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+        run: |
+            mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+            cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
+
+            find . -name "*.zip" -exec unzip {} \;
+            datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
+            datalad save . -m "Added model weights"
+
+      - name: Add weights
+        env:
+          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+        run: |
+            mkdir -p ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+            cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
+
+            find . -name "*.zip" -exec unzip {} \;
+            datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
+            datalad save . -m "Added sample data"
+
+      - run: |
+          pwd
+          tree
+
+      # # Build the Docker image 🟢
+      # - name: Build Docker image
       #   run: |
-      #       mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-      #       cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights
-      #       datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.WEIGHTS }}"
-      #       datalad save . -m "Added model weights"
+      #     docker build -t ${{ needs.build-docker.outputs.MODELNAME }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+      #     docker save --output ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar ${{ needs.build-docker.outputs.MODELNAME }}
 
-      #       mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-      #       cd ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data
-      #       datalad download-url --overwrite -m "Added Sample Dataset" "${{ needs.create_new_branch.outputs.SAMPLEDATA }}"
-      #       datalad save . -m "Added sample data"
+      # # Convert the docker image to a singularity image
+      # - name: Convert docker image to singularity image
+      #   run: |
+      #     singularity build ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.sif docker-archive://./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar
 
-      #       datalad push -f --to osf-storage
-      #       datalad push --to origin
+      # - name: Collect Workflow Telemetry
+      #   uses: runforesight/workflow-telemetry-action@v1
+      #   with:
+      #     job_summary: true
+      #     proc_trace_sys_enable: true
+      #     proc_trace_table_show: true
+  
+      # # Run in singularity the test command saved under needs.create_new_branch.outputs.DEEPCSR
+      # - name: Run test command in Singularity
+      #   run: |
+      #     # Parent directory as a bind path in a env variable
+
+      #     singularity exec --nv ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
+
+      # # Load the Docker image 🟢
+      # - name: Load Docker image
+      #   run: |
+      #     docker load --input "./${{ needs.create_new_branch.outputs.MODELPATH }}/docker/${{ needs.build-docker.outputs.MODELNAME }}.tar"
+
+      # # Test model with docker image as well
+      # - name: Run test command in Docker
+      #   run: |
+      #     docker run --gpus all -v /actions-runner/_work/${{ github.event.repository.name }}/${{ github.event.repository.name }}:/output ${{ needs.build-docker.outputs.MODELNAME }} "cd /output; ${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
+          
+      # Get model's version from model's path
+      - name: Get model's version
+        id: modelVersion
+        run: |
+          # Get the version
+          model_version=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF)}')
+          
+          # Set the version as an output
+          echo "model_version=$model_version" >> $GITHUB_OUTPUT
+      
+      # # Push the Docker image to Docker Hub (only if the PR is merged) 🟢
+      # - name: Push Docker image
+      #   run: |
+      #     docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+      #     docker tag ${{ needs.build-docker.outputs.MODELNAME }} ${{ needs.build-docker.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
+      #     docker push ${{ needs.build-docker.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
 
   stop-runner:
     name: Stop self-hosted EC2 runner
-    needs: [start-runner, create_new_branch, push-model] # required to wait when the main job is done
+    needs: [start-runner, create_new_branch, push_files] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -298,7 +361,7 @@ jobs:
 
   failed:
     runs-on: ubuntu-latest
-    needs: [start-runner, create_new_branch, push-model]
+    needs: [start-runner, create_new_branch, push_files]
     if: ${{ failure() }}
     steps:
       - name: Set labels
@@ -322,7 +385,7 @@ jobs:
           emoji: '+1,eyes'
         
   success:
-      needs: [start-runner, create_new_branch, push-model, stop-runner]
+      needs: [start-runner, create_new_branch, push_files, stop-runner]
       runs-on: ubuntu-latest
       steps:
         - name: Set labels
