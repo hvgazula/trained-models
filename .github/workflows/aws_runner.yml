@@ -320,8 +320,14 @@ jobs:
 
       - name: Commit changes
         run: |
+          pwd
+          datalad siblings
+          datalad siblings
+          git config --system user.name "hvgazula"
+          git config --system user.email "hvgazula@umich.edu"
+
           datalad save -m "SUCCESS: Adding Model" ${{ needs.push_files.outputs.ORGNAME }}
-          datalad push -f all --to osf-annex1106-storage
+          # datalad push -f all --to osf-annex1106-storage
           datalad push --to origin
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
