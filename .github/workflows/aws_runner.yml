@@ -5,6 +5,7 @@ on:
 
 jobs:
   start-runner:
+    name: Start self-hosted EC2 runner
     if: ${{ startsWith(github.event.issue.title, 'New Model:') && github.event.label.name != 'failed' }}
     runs-on: ubuntu-latest
     outputs:
@@ -28,7 +29,8 @@ jobs:
           subnet-id: ${{ vars.AWS_SUBNET }}
           security-group-id: ${{ vars.AWS_SECURITY_GROUP }}
 
-  create_new_branch:
+  init-setup:
+    name: Initial setup on EC2
     needs: [start-runner]
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
     outputs:
@@ -45,50 +47,58 @@ jobs:
       CONFIG: ${{ steps.get_model_config.outputs.model_config }}
       TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
 
+      IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
+      MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
+
     steps:
-      - name: Cleanup disk space for large docker images
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf /opt/hostedtoolcache
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      # - name: Cleanup disk space for large docker images
+      #   run: |
+      #     sudo rm -rf /usr/share/dotnet
+      #     sudo rm -rf /opt/ghc
+      #     sudo rm -rf "/usr/local/share/boost"
+      #     sudo rm -rf /opt/hostedtoolcache
+      #     sudo rm -rf "$AGENT_TOOLSDIRECTORY"
             
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
+      # - name: Free Disk Space (Ubuntu)
+      #   uses: jlumbroso/free-disk-space@main
+      #   with:
+      #     # this might remove tools that are actually needed,
+      #     # if set to "true" but frees about 6 GB
+      #     tool-cache: false
           
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: false
+      #     # all of these default to true, but feel free to set to
+      #     # "false" if necessary for your workflow
+      #     android: true
+      #     dotnet: true
+      #     haskell: true
+      #     large-packages: true
+      #     docker-images: false
 
-      - name: Install singularity
-        run: |
-          wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
+      # - name: Install singularity
+      #   run: |
+      #     wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
 
-          sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
-          singularity version
+      #     sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
+      #     singularity version
 
-      # Install datalad 🟢
-      - name: Install Datalad
+      - name: Install datalad and yaml tools
         id: datalad-testing
         run: |
           apt install unzip datalad python3-pip subversion tree -y
-          python3 -m pip install datalad-installer datalad-osf
-          python3 -m pip install pyyaml oyaml linkml
+          python3 -m pip install datalad-installer datalad-osf pyyaml oyaml linkml
           
           datalad-installer --sudo ok git-annex -m datalad/git-annex:release
           sudo git config --global filter.annex.process "git-annex filter-process"
-          
+      
+      - name: Configure git credentials
+        run:
           git config --system user.name "trained_models"
           git config --system user.email "trained_models"
+
+      - name: Print Datalad Siblings
+        run: |
+          datalad siblings
+          datalad siblings
 
       # This will automatically create a new branch from this issue, using custom config at /.github/issue-branch.yml 🟢
       - name: Create Issue Branch
@@ -97,22 +107,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           
-      # Checkout the repository to the GitHub Actions runner 🟢
-      - uses: actions/checkout@v4
+      - name: Clone repo and checkout branch
+        uses: actions/checkout@v4
         with:
           ref: ${{ steps.branch.outputs.branchName }}
           fetch-depth: 0
           
-      # Scrape the info from the issue 🟢
-      - uses: stefanbuck/github-issue-parser@v3
+      - name: Scrape info from the issue 🟢
+        uses: stefanbuck/github-issue-parser@v3
         id: issue-parser
         with:
           template-path: .github/ISSUE_TEMPLATE/addModel.yml # optional but recommended
         env:
           HOME: "/home/ubuntu"
 
-      # Scrape info from the form 🟢
-      - name: Get the Path
+      - name: Get "Org/Model/Version" string
         id: get_path
         run: echo "path=${{ steps.issue-parser.outputs.issueparser_path }}" >> $GITHUB_OUTPUT
       
@@ -131,7 +140,7 @@ jobs:
           echo "${{ steps.issue-parser.outputs.issueparser_python-scripts }}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Get Model Info
+      - name: Get Model Spec and Model Card
         id: get_model_info
         run: |
           echo "model_info<<EOF" >> $GITHUB_ENV
@@ -143,22 +152,23 @@ jobs:
         run: |
           echo "test_command=${{ steps.issue-parser.outputs.issueparser_testCommand }}" >> $GITHUB_OUTPUT
 
-      - name: Get Sample Data
-        id: get_data
-        run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
-      
       - name: Get Config
         id: get_model_config
         run: |
           echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
 
-  push_files:
-    needs: [start-runner, create_new_branch]
-    runs-on: ${{ needs.start-runner.outputs.label }}
-    outputs:
-      IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
-      MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
-    steps: 
+      - name: Get Sample Data
+        id: get_data
+        run: echo "sample_data=${{ steps.issue-parser.outputs.issueparser_sample-data }}" >> $GITHUB_OUTPUT
+
+  # add-files-to-branch:
+  #   needs: [start-runner, init-setup]
+  #   runs-on: ${{ needs.start-runner.outputs.label }}
+  #   outputs:
+  #     IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
+  #     MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
+
+  #   steps: 
       # Get svn url for exporting docker 🟢
       - name: Clone docker folder
         run: |
@@ -213,14 +223,11 @@ jobs:
           url="${{ needs.create_new_branch.outputs.CONFIG }}"
               
           svn_url=$(echo "$url" | sed -E 's|/tree/[^/]+|/trunk|; s|/blob/[^/]+|/trunk|')
-    
           svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}/config
     
       # Commit the new created files and folders to the branch needs.create_new_branch.outputs.BRANCHNAME 🟢
       - name: Commit and Push the new files
         run: |
-          git config --system user.name "trained_models"
-          git config --system user.email "trained_models"
           # git add ${{ needs.create_new_branch.outputs.MODELPATH }}
           # git commit -m "Added model files"
           # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
@@ -234,25 +241,26 @@ jobs:
         env:
             model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
         
-      # Update the model's spec.yaml file
+      # TODO: Update the model's spec.yaml file
       - name: Update yaml file
         run: |
           model_name=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF-1)}')
           python3 ./.github/workflows/update_yaml_info.py ${{ needs.create_new_branch.outputs.MODELPATH }}/docker $model_name
       
-      # Get image name 🟢
-      - name: Set docker image name
+      - name: Split Org/Model/Version
         id: set_image_name
         run: |
           full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
-          model_name=$(echo "$full_path" | awk -F '/' '{print $(NF-1)}')
-          org_name=$(echo "$full_path" | awk -F '/' '{print $(NF-2)}')
-          model_version=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF)}')
+          
+          org_name=$(echo "$full_path" | awk -F '/' '{print $1}')
+          model_name=$(echo "$full_path" | awk -F '/' '{print $2}')
+          model_version=$(echo "$full_path" | awk -F '/' '{print $3}')
               
-          echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
-          echo "model_name=$model_name" >> $GITHUB_OUTPUT
           echo "org_name=$org_name" >> $GITHUB_OUTPUT
+          echo "model_name=$model_name" >> $GITHUB_OUTPUT
           echo "model_version=$model_version" >> $GITHUB_OUTPUT
+
+          echo "image_name=neuronets/$model_name" >> $GITHUB_OUTPUT
 
       # Git annex addurl the weights
       - name: Add weights
@@ -265,57 +273,62 @@ jobs:
             # unzip files in place and delete after
             find . -name '*.zip' -not -path "./.git/*" -execdir unzip '{}' ';' -delete
       
-      - name: print directory structure
+      - name: Print directory structure
         run: tree ${{ steps.set_image_name.outputs.org_name }}
 
-      # Build the Docker image 🟢
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+      # # Build the Docker image 🟢
+      # - name: Build Docker image
+      #   run: |
+      #     docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
 
-      # Convert the docker image to a singularity image
-      - name: Convert docker image to singularity image
-        run: |
-          singularity build ../${{ steps.set_image_name.outputs.model_name }}.sif docker-daemon://${{ steps.set_image_name.outputs.model_name }}:latest
+      # # Convert the docker image to a singularity image
+      # - name: Convert docker image to singularity image
+      #   run: |
+      #     singularity build ../${{ steps.set_image_name.outputs.model_name }}.sif docker-daemon://${{ steps.set_image_name.outputs.model_name }}:latest
 
-      - name: Collect Workflow Telemetry
-        uses: runforesight/workflow-telemetry-action@v1
-        with:
-          job_summary: true
-          proc_trace_sys_enable: true
-          proc_trace_table_show: true
+      # - name: Collect Workflow Telemetry
+      #   uses: runforesight/workflow-telemetry-action@v1
+      #   with:
+      #     job_summary: true
+      #     proc_trace_sys_enable: true
+      #     proc_trace_table_show: true
   
-      # # Run in singularity the test command
       # - name: Run test command in Singularity
+      #   id: singularity_test
       #   run: |
       #     # Parent directory as a bind path in a env variable
-      #     singularity exec --nv ../${{ needs.push_files.outputs.MODELNAME }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
+      #     singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
 
-      # # Test model with docker image as well
       # - name: Run test command in Docker
+      #   id: docker_test
       #   run: |
-      #     docker run --gpus all -v /actions-runner/_work/${{ github.event.repository.name }}/${{ github.event.repository.name }}:/output ${{ needs.build-docker.outputs.MODELNAME }} "cd /output; ${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
+      #     pwd
+      #     docker run --gpus all -v $(pwd):/${{ github.event.repository.name }} \
+      #     -w /${{ github.event.repository.name }} \
+      #     ${{ steps.set_image_name.outputs.model_name }} "${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
           
       # # Push the Docker image to Docker Hub (only if the PR is merged) 🟢
       # - name: Push Docker image
+      #   if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success' 
       #   run: |
       #     docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-      #     docker tag ${{ needs.push_files.outputs.MODELNAME }} ${{ needs.push_files.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
-      #     docker push ${{ needs.push_files.outputs.IMAGENAME }}:${{ steps.modelVersion.outputs.model_version }}
+      #     docker tag ${{ steps.set_image_name.outputs.model_name }} ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
+      #     docker push ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
 
-      # Commit the changes (spec.yaml file and model card) 🟢
+  end-setup:
+    name: Closing setup on EC2
+    needs: [start-runner, init-setup]
+    runs-on: ${{ needs.start-runner.outputs.label }}
+    steps: 
       - name: Commit changes
         run: |
-          git config --system user.name "trained_models"
-          git config --system user.email "trained_models"
-
-          # git add ${{ needs.create_new_branch.outputs.MODELPATH }}/spec.yaml
-          # git commit -m "Updated spec.yaml"
-          # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
+          datalad save -m "Success: Added Model" ${{ needs.create_new_branch.outputs.MODELNAME }}
+          datalad push --to osf-annex1106-storage
+          datalad push --to origin
 
   stop-runner:
     name: Stop self-hosted EC2 runner
-    needs: [start-runner, create_new_branch, push_files] # required to wait when the main job is done
+    needs: [start-runner, init-setup, end-setup] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -335,8 +348,9 @@ jobs:
           ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
 
   failed:
+    name: Failed
     runs-on: ubuntu-latest
-    needs: [start-runner, create_new_branch, push_files]
+    needs: [start-runner, init-setup, end-setup]
     if: ${{ failure() }}
     steps:
       - name: Set labels
@@ -360,25 +374,26 @@ jobs:
           emoji: '+1,eyes'
         
   success:
-      needs: [start-runner, create_new_branch, push_files, stop-runner]
-      runs-on: ubuntu-latest
-      steps:
-        - name: Set labels
-          uses: actions-cool/issues-helper@v3
-          with:
-            actions: 'set-labels'
-            token: ${{ secrets.GITHUB_TOKEN }}
-            issue-number: ${{ github.event.issue.number }}
-            labels: 'success'
-        
-        - name: Create comment
-          uses: actions-cool/issues-helper@v3
-          with:
-            actions: 'create-comment'
-            token: ${{ secrets.GITHUB_TOKEN }}
-            issue-number: ${{ github.event.issue.number }}
-            body: |
-                [This is an automated message] Hello @${{ github.event.issue.user.login }}. The workflow linked to adding your model finished successfully! Please double check that this issue's tag is "success."  
-                🟢 A Draft PR should be linked to this issue. Now that your model passed the checks, feel free to change the status of the PR to "ready for review."
-                ⭐ Thank you for adding a model to Nobrainer-Zoo!
-            emoji: '+1,hooray,rocket'
+    name: Success
+    needs: [start-runner, init-setup, end-setup, stop-runner]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set labels
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'set-labels'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          labels: 'success'
+      
+      - name: Create comment
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'create-comment'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+              [This is an automated message] Hello @${{ github.event.issue.user.login }}. The workflow linked to adding your model finished successfully! Please double check that this issue's tag is "success."  
+              🟢 A Draft PR should be linked to this issue. Now that your model passed the checks, feel free to change the status of the PR to "ready for review."
+              ⭐ Thank you for adding a model to Nobrainer-Zoo!
+          emoji: '+1,hooray,rocket'
