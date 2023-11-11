@@ -47,35 +47,35 @@ jobs:
       TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
 
     steps:
-      # - name: Cleanup disk space for large docker images
-      #   run: |
-      #     sudo rm -rf /usr/share/dotnet
-      #     sudo rm -rf /opt/ghc
-      #     sudo rm -rf "/usr/local/share/boost"
-      #     sudo rm -rf /opt/hostedtoolcache
-      #     sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      - name: Cleanup disk space for large docker images
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /opt/hostedtoolcache
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
             
-      # - name: Free Disk Space (Ubuntu)
-      #   uses: jlumbroso/free-disk-space@main
-      #   with:
-      #     # this might remove tools that are actually needed,
-      #     # if set to "true" but frees about 6 GB
-      #     tool-cache: false
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
           
-      #     # all of these default to true, but feel free to set to
-      #     # "false" if necessary for your workflow
-      #     android: true
-      #     dotnet: true
-      #     haskell: true
-      #     large-packages: true
-      #     docker-images: false
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
 
-      # - name: Install singularity
-      #   run: |
-      #     wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
+      - name: Install singularity
+        run: |
+          wget https://github.com/sylabs/singularity/releases/download/v4.0.0/singularity-ce_4.0.0-focal_amd64.deb
 
-      #     sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
-      #     singularity version
+          sudo apt install ./singularity-ce_4.0.0-focal_amd64.deb -y
+          singularity version
 
       - name: Install Datalad
         id: datalad-testing
@@ -157,11 +157,11 @@ jobs:
     name: Add files to branch
     needs: [start-runner, create_new_branch]
     runs-on: ${{ needs.start-runner.outputs.label }}
-    outputs:
-      IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
-      ORGNAME: ${{ steps.set_image_name.outputs.org_name}}
-      MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
-      VERSION: ${{ steps.set_image_name.outputs.model_version }}
+    # outputs:
+    #   IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
+    #   ORGNAME: ${{ steps.set_image_name.outputs.org_name}}
+    #   MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
+    #   VERSION: ${{ steps.set_image_name.outputs.model_version }}
     steps: 
       # Get svn url for exporting docker 🟢
       - name: Clone docker folder
@@ -275,58 +275,50 @@ jobs:
       - name: print directory structure
         run: tree ${{ steps.set_image_name.outputs.org_name }}
 
-      # # Build the Docker image 🟢
-      # - name: Build Docker image
-      #   run: |
-      #     docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+      # Build the Docker image 🟢
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
 
-      # # Convert the docker image to a singularity image
-      # - name: Convert docker image to singularity image
-      #   run: |
-      #     singularity build ../${{ steps.set_image_name.outputs.model_name }}.sif docker-daemon://${{ steps.set_image_name.outputs.model_name }}:latest
+      # Convert the docker image to a singularity image
+      - name: Convert docker image to singularity image
+        run: |
+          singularity build ../${{ steps.set_image_name.outputs.model_name }}.sif docker-daemon://${{ steps.set_image_name.outputs.model_name }}:latest
 
-      # - name: Collect Workflow Telemetry
-      #   uses: runforesight/workflow-telemetry-action@v1
-      #   with:
-      #     job_summary: true
-      #     proc_trace_sys_enable: true
-      #     proc_trace_table_show: true
+      - name: Collect Workflow Telemetry
+        uses: runforesight/workflow-telemetry-action@v1
+        with:
+          job_summary: true
+          proc_trace_sys_enable: true
+          proc_trace_table_show: true
   
-      # # Run in singularity the test command
-      # - name: Run test command in Singularity
-      #   run: |
-      #     # Parent directory as a bind path in a env variable
-      #     singularity exec --nv ../${{ needs.push_files.outputs.MODELNAME }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
+      # Run in singularity the test command
+      - name: Run test command in Singularity
+        id: singularity_test 
+        run: |
+          # Parent directory as a bind path in a env variable
+          # singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
+          singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif python --version 
 
-      # Test model with docker image as well
-      # - name: Run test command in Docker
-      #   run: |
-      #     docker run --gpus all -v $(pwd):/output \
-      #     -w /output \
-      #     ${{ needs.push_files.outputs.MODELNAME }} "${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
+      - name: Run test command in Docker
+        id: docker_test
+        run: |
+          # docker run --gpus all -v $(pwd):/output \
+          # -w /output \
+          # ${{ steps.set_image_name.outputs.model_name }} "${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
+          docker run ${{ steps.set_image_name.outputs.model_name }} date 
           
-      
-
-  wrap-up:
-    name: Pushing to Git and Annex
-    needs: [start-runner, create_new_branch, push_files]
-    runs-on: ${{ needs.start-runner.outputs.label }}
-    steps:
-      # - name: Push Docker image
-      #   run: |
-      #     docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-      #     docker tag ${{ needs.push_files.outputs.MODELNAME }} ${{ needs.push_files.outputs.IMAGENAME }}:${{ needs.push_files.outputs.VERSION }}
-      #     docker push ${{ needs.push_files.outputs.IMAGENAME }}:${{ needs.push_files.outputs.VERSION }}
+      - name: Push Docker image
+        if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
+        run: |
+          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+          docker tag ${{ steps.set_image_name.outputs.model_name }} ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
+          docker push ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
 
       - name: Commit changes
+        if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
         run: |
-          pwd
-          datalad siblings
-          datalad siblings
-          git config --system user.name "hvgazula"
-          git config --system user.email "hvgazula@umich.edu"
-
-          datalad save -m "SUCCESS: Adding Model" ${{ needs.push_files.outputs.ORGNAME }}
+          datalad save -m "SUCCESS: Adding Model" ${{ steps.set_image_name.outputs.org_name }}
           # datalad push -f all --to osf-annex1106-storage
           datalad push --to origin
         env:
@@ -334,7 +326,7 @@ jobs:
 
   stop-runner:
     name: Stop EC2 runner
-    needs: [start-runner, create_new_branch, push_files, wrap-up] # required to wait when the main job is done
+    needs: [start-runner, create_new_branch, push_files] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -355,7 +347,7 @@ jobs:
 
   failed:
     runs-on: ubuntu-latest
-    needs: [start-runner, create_new_branch, push_files, wrap-up]
+    needs: [start-runner, create_new_branch, push_files]
     if: ${{ failure() }}
     steps:
       - name: Set labels
@@ -379,7 +371,7 @@ jobs:
           emoji: '+1,eyes'
         
   success:
-    needs: [start-runner, create_new_branch, push_files, wrap-up, stop-runner]
+    needs: [start-runner, create_new_branch, push_files, stop-runner]
     runs-on: ubuntu-latest
     steps:
       - name: Set labels
