@@ -32,20 +32,6 @@ jobs:
   create_new_branch:
     needs: [start-runner]
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
-    outputs:
-      BRANCHNAME: ${{ steps.branch.outputs.branchName }}
-
-      # All the issue form data
-      MODELPATH: ${{ steps.get_path.outputs.path }}
-      WEIGHTS: ${{ steps.get_weights.outputs.weights }}
-      DOCKER: ${{ steps.get_docker.outputs.docker }}
-      PYTHON: ${{ steps.python_scripts.outputs.pythons }}
-      MODELINFO: ${{ env.model_info }}
-      SAMPLEDATA: ${{ steps.get_data.outputs.sample_data }}
-      PYTHONS: ${{ env.pythons }}
-      CONFIG: ${{ steps.get_model_config.outputs.model_config }}
-      TESTCOMMAND: ${{ steps.get_test_command.outputs.test_command }}
-
     steps:
       - name: Cleanup disk space for large docker images
         run: |
@@ -153,23 +139,13 @@ jobs:
         run: |
           echo "model_config=${{ steps.issue-parser.outputs.issueparser_modelConfig }}" >> $GITHUB_OUTPUT
 
-  push_files:
-    name: Add files to branch
-    needs: [start-runner, create_new_branch]
-    runs-on: ${{ needs.start-runner.outputs.label }}
-    # outputs:
-    #   IMAGENAME: ${{ steps.set_image_name.outputs.image_name }}
-    #   ORGNAME: ${{ steps.set_image_name.outputs.org_name}}
-    #   MODELNAME: ${{ steps.set_image_name.outputs.model_name }}
-    #   VERSION: ${{ steps.set_image_name.outputs.model_version }}
-    steps: 
       # Get svn url for exporting docker 🟢
       - name: Clone docker folder
         run: |
-          url="${{ needs.create_new_branch.outputs.DOCKER }}"
+          url="${{ steps.get_docker.outputs.docker }}"
           
           svn_url=$(echo "$url" | sed -E 's|/tree/[^/]+|/trunk|; s|/blob/[^/]+|/trunk|')
-          svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+          svn export --force $svn_url ./${{ steps.get_path.outputs.path }}/docker
       
       # Get svn url for exporting 🟢
       - name: Generate Python SVN URLs
@@ -179,12 +155,12 @@ jobs:
           python3 ./.github/workflows/getPythonScripts.py >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
         env:
-            pythons: ${{ needs.create_new_branch.outputs.PYTHONS }}
+            pythons: ${{ env.pythons }}
       
       # Export the urls/clone the scripts 🟢
       - name: Clone python scripts
         run: |
-          cd ./${{ needs.create_new_branch.outputs.MODELPATH }}
+          cd ./${{ steps.get_path.outputs.path }}
           svn_urls="${{ env.pythons2 }}"
           for svn_url in $svn_urls; do
             svn export --force $svn_url
@@ -198,57 +174,45 @@ jobs:
           python3 ./.github/workflows/getModelInfo.py >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
         env:
-            model_info: ${{ needs.create_new_branch.outputs.MODELINFO }}
+            model_info: ${{ env.model_info }}
 
       # Export the urls/clone the model info 🟢
       - name: Clone model info
         run: |
           model_info="${{ env.model_info2 }}"
           for svn_url in $model_info; do
-            svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}
+            svn export --force $svn_url ./${{ steps.get_path.outputs.path }}
           done
 
       # Clone config files
       - name: Config file clone
         # Only run if needs.create_new_branch.outputs.CONFIG is not empty
-        if: ${{ needs.create_new_branch.outputs.CONFIG != '' }}
+        if: ${{ steps.get_model_config.outputs.model_config != '' }}
         run: |
-          mkdir ./${{ needs.create_new_branch.outputs.MODELPATH }}/config/
-          url="${{ needs.create_new_branch.outputs.CONFIG }}"
+          mkdir ./${{ steps.get_path.outputs.path }}/config/
+          url="${{ steps.get_model_config.outputs.model_config }}"
               
           svn_url=$(echo "$url" | sed -E 's|/tree/[^/]+|/trunk|; s|/blob/[^/]+|/trunk|')
     
-          svn export --force $svn_url ./${{ needs.create_new_branch.outputs.MODELPATH }}/config
+          svn export --force $svn_url ./${{ steps.get_path.outputs.path }}/config
     
-      # Commit the new created files and folders to the branch needs.create_new_branch.outputs.BRANCHNAME 🟢
-      - name: Commit and Push the new files
-        run: |
-          git config --system user.name "trained_models"
-          git config --system user.email "trained_models"
-          # git add ${{ needs.create_new_branch.outputs.MODELPATH }}
-          # git commit -m "Added model files"
-          # git push origin ${{ needs.create_new_branch.outputs.BRANCHNAME }}
-
-      # Create model card and spec.yaml file
       - name: Validate model card and spec files
         run: |
             echo "## Model Card and Spec Validation :white_check_mark:" >> $GITHUB_STEP_SUMMARY
             echo "Model Card and spec yaml files are being validated here with LinkML Schema" >> $GITHUB_STEP_SUMMARY
             python3 ./.github/workflows/create_model_card_and_spec.py
         env:
-            model_path: ${{ needs.create_new_branch.outputs.MODELPATH }}
+            model_path: ${{ steps.get_path.outputs.path }}
         
-      # Update the model's spec.yaml file
       - name: Update yaml file
         run: |
-          model_name=$(echo "${{ needs.create_new_branch.outputs.MODELPATH }}" | awk -F '/' '{print $(NF-1)}')
-          python3 ./.github/workflows/update_yaml_info.py ${{ needs.create_new_branch.outputs.MODELPATH }}/docker $model_name
+          model_name=$(echo "${{ steps.get_path.outputs.path }}" | awk -F '/' '{print $(NF-1)}')
+          python3 ./.github/workflows/update_yaml_info.py ${{ steps.get_path.outputs.path }}/docker $model_name
       
-      # Get image name 🟢
       - name: Set docker image name
         id: set_image_name
         run: |
-          full_path="${{ needs.create_new_branch.outputs.MODELPATH }}"
+          full_path="${{ steps.get_path.outputs.path }}"
 
           org_name=$(echo "$full_path" | awk -F '/' '{print $1}')
           model_name=$(echo "$full_path" | awk -F '/' '{print $2}')
@@ -261,13 +225,12 @@ jobs:
 
           echo "model_version=$model_version" >> $GITHUB_OUTPUT
 
-      # Git annex addurl the weights
       - name: Add weights
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
         run: |
-            datalad download-url -o --nosave "${{ needs.create_new_branch.outputs.WEIGHTS }}" -O ./${{ needs.create_new_branch.outputs.MODELPATH }}/weights/
-            datalad download-url -o --nosave "${{ needs.create_new_branch.outputs.SAMPLEDATA }}" -O ./${{ needs.create_new_branch.outputs.MODELPATH }}/example-data/
+            datalad download-url -o --nosave "${{ steps.get_weights.outputs.weights }}" -O ./${{ steps.get_path.outputs.path }}/weights/
+            datalad download-url -o --nosave "${{ steps.get_data.outputs.sample_data }}" -O ./${{ steps.get_path.outputs.path }}/example-data/
 
             # unzip files in place and delete after
             find . -name '*.zip' -not -path "./.git/*" -execdir unzip '{}' ';' -delete
@@ -275,12 +238,10 @@ jobs:
       - name: print directory structure
         run: tree ${{ steps.set_image_name.outputs.org_name }}
 
-      # Build the Docker image 🟢
       - name: Build Docker image
         run: |
-          docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ needs.create_new_branch.outputs.MODELPATH }}/docker
+          docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ steps.get_path.outputs.path }}/docker
 
-      # Convert the docker image to a singularity image
       - name: Convert docker image to singularity image
         run: |
           singularity build ../${{ steps.set_image_name.outputs.model_name }}.sif docker-daemon://${{ steps.set_image_name.outputs.model_name }}:latest
@@ -292,21 +253,18 @@ jobs:
           proc_trace_sys_enable: true
           proc_trace_table_show: true
   
-      # Run in singularity the test command
       - name: Run test command in Singularity
         id: singularity_test 
         run: |
           # Parent directory as a bind path in a env variable
-          # singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ needs.create_new_branch.outputs.TESTCOMMAND }}
-          singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif date
+          # singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ steps.get_test_command.outputs.test_command }}
 
       - name: Run test command in Docker
         id: docker_test
         run: |
-          # docker run --gpus all -v $(pwd):/output \
-          # -w /output \
-          # ${{ steps.set_image_name.outputs.model_name }} "${{ needs.create_new_branch.outputs.TESTCOMMAND }}"
-          docker run ${{ steps.set_image_name.outputs.model_name }} date 
+          docker run --gpus all -v $(pwd):/output \
+          -w /output \
+          ${{ steps.set_image_name.outputs.model_name }} "${{ steps.get_test_command.outputs.test_command }}"
           
       - name: Push Docker image
         if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
@@ -319,14 +277,14 @@ jobs:
         if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
         run: |
           datalad save -m "SUCCESS: Adding Model" ${{ steps.set_image_name.outputs.org_name }}
-          # datalad push -f all --to osf-annex1106-storage
+          datalad push -f all --to osf-annex1106-storage
           datalad push --to origin
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
 
   stop-runner:
     name: Stop EC2 runner
-    needs: [start-runner, create_new_branch, push_files] # required to wait when the main job is done
+    needs: [start-runner, create_new_branch] # required to wait when the main job is done
     runs-on: ubuntu-latest
     if: ${{ always() }}
     # required to stop the runner even if the error happened in the previous jobs
@@ -347,7 +305,7 @@ jobs:
 
   failed:
     runs-on: ubuntu-latest
-    needs: [start-runner, create_new_branch, push_files]
+    needs: [start-runner, create_new_branch]
     if: ${{ failure() }}
     steps:
       - name: Set labels
@@ -371,7 +329,7 @@ jobs:
           emoji: '+1,eyes'
         
   success:
-    needs: [start-runner, create_new_branch, push_files, stop-runner]
+    needs: [start-runner, create_new_branch, stop-runner]
     runs-on: ubuntu-latest
     steps:
       - name: Set labels
