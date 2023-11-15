@@ -240,7 +240,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ steps.set_image_name.outputs.model_name }} ./${{ steps.get_path.outputs.path }}/docker
+          docker build -t ${{ steps.set_image_name.outputs.model_name1 }} ./${{ steps.get_path.outputs.path1 }}/docker
 
       - name: Convert docker image to singularity image
         run: |
