@@ -257,7 +257,7 @@ jobs:
         id: singularity_test 
         run: |
           # Parent directory as a bind path in a env variable
-          # singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ steps.get_test_command.outputs.test_command }}
+          singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ steps.get_test_command.outputs.test_command }}
 
       - name: Run test command in Docker
         id: docker_test
