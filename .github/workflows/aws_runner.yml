@@ -284,8 +284,8 @@ jobs:
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+      # - name: Create Pull Request
+      #   uses: peter-evans/create-pull-request@v5
 
   stop-runner:
     name: Stop EC2 runner
