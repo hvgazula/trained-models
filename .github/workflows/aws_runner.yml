@@ -280,7 +280,8 @@ jobs:
         run: |
           datalad save -m "SUCCESS: Adding Model" ${{ steps.set_image_name.outputs.org_name }}
           datalad push -f all --to osf-annex1106-storage
-          datalad push --to origin
+          # datalad push --to origin
+          git push origin ${{ steps.branch.outputs.branchName }}
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
 
