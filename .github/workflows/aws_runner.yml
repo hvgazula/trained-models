@@ -33,28 +33,28 @@ jobs:
     needs: [start-runner]
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
     steps:
-      - name: Cleanup disk space for large docker images
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf /opt/hostedtoolcache
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      # - name: Cleanup disk space for large docker images
+      #   run: |
+      #     sudo rm -rf /usr/share/dotnet
+      #     sudo rm -rf /opt/ghc
+      #     sudo rm -rf "/usr/local/share/boost"
+      #     sudo rm -rf /opt/hostedtoolcache
+      #     sudo rm -rf "$AGENT_TOOLSDIRECTORY"
             
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
+      # - name: Free Disk Space (Ubuntu)
+      #   uses: jlumbroso/free-disk-space@main
+      #   with:
+      #     # this might remove tools that are actually needed,
+      #     # if set to "true" but frees about 6 GB
+      #     tool-cache: false
           
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: false
+      #     # all of these default to true, but feel free to set to
+      #     # "false" if necessary for your workflow
+      #     android: true
+      #     dotnet: true
+      #     haskell: true
+      #     large-packages: true
+      #     docker-images: false
 
       - name: Install singularity
         run: |
@@ -207,7 +207,7 @@ jobs:
       - name: Update yaml file
         run: |
           model_name=$(echo "${{ steps.get_path.outputs.path }}" | awk -F '/' '{print $(NF-1)}')
-          python3 ./.github/workflows/update_yaml_info.py ${{ steps.get_path.outputs.path }}/docker $model_name
+          python3 ./.github/workflows/update_yaml_info.py ${{ steps.get_path.outputs.path }} $model_name
       
       - name: Set docker image name
         id: set_image_name
@@ -257,21 +257,23 @@ jobs:
         id: singularity_test 
         run: |
           # Parent directory as a bind path in a env variable
-          singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ steps.get_test_command.outputs.test_command }}
+          # singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif ${{ steps.get_test_command.outputs.test_command }}
+          singularity exec --nv ../${{ steps.set_image_name.outputs.model_name }}.sif pwd 
 
       - name: Run test command in Docker
         id: docker_test
         run: |
           docker run --gpus all -v $(pwd):/output \
           -w /output \
-          ${{ steps.set_image_name.outputs.model_name }} "${{ steps.get_test_command.outputs.test_command }}"
+          ${{ steps.set_image_name.outputs.model_name }} "pwd" 
+          # ${{ steps.set_image_name.outputs.model_name }} "${{ steps.get_test_command.outputs.test_command }}"
           
-      - name: Push Docker image
-        if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
-        run: |
-          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-          docker tag ${{ steps.set_image_name.outputs.model_name }} ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
-          docker push ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
+      # - name: Push Docker image
+      #   if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
+      #   run: |
+      #     docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+      #     docker tag ${{ steps.set_image_name.outputs.model_name }} ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
+      #     docker push ${{ steps.set_image_name.outputs.image_name }}:${{ steps.set_image_name.outputs.model_version }}
 
       - name: Commit changes
         if: steps.docker_test.outcome == 'success' && steps.singularity_test.outcome == 'success'
@@ -281,6 +283,9 @@ jobs:
           datalad push --to origin
         env:
           OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
 
   stop-runner:
     name: Stop EC2 runner
